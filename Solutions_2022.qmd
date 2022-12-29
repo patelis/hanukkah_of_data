@@ -1,0 +1,161 @@
+---
+title: "Hanukkah of Data 2022"
+author: "Konstantinos Patelis"
+format: html
+---
+
+## Data & Libraries
+
+```{r}
+
+library(tidyverse)
+library(lubridate)
+library(clock)
+library(here)
+```
+
+```{r}
+
+customers <- read_csv(here("data", "2022", "noahs-customers.csv"))
+items <- read_csv(here("data", "2022", "noahs-orders_items.csv"))
+orders <- read_csv(here("data", "2022", "noahs-orders.csv"))
+products <- read_csv(here("data", "2022", "noahs-products.csv"))
+
+```
+
+## Day 1
+
+```{r}
+customers %>% 
+  extract(name, into = "last_name", regex = " ([A-Za-z]+)") %>% 
+  mutate(name_as_num = str_replace_all(str_to_lower(last_name), 
+                                       c("[abc]" = "2", 
+                                         "[def]" = "3", 
+                                         "[ghi]" = "4",
+                                         "[jkl]" = "5",
+                                         "[mno]" = "6", 
+                                         "[pqrs]"= "7",
+                                         "[tuv]" = "8",
+                                         "[wxyz]"= "9")
+                                       ),
+         phone_no_space = str_replace_all(phone, "-", "")) %>% 
+  filter(name_as_num == phone_no_space)
+```
+
+## Day 2
+
+```{r}
+orders %>% 
+  filter(year(ordered) == 2017) %>% 
+  left_join(customers %>% select(customerid, name, phone, citystatezip), by = "customerid") %>% 
+  mutate(initials = str_replace_all(name, "[a-z]| ", "")) %>% 
+  left_join(items %>% select(orderid, sku), by = "orderid") %>% 
+  left_join(products %>% select(sku, desc), by = "sku") %>% 
+  filter(initials == "JD" & (str_detect(desc, "Coffee") | str_detect(desc, "Cleaner"))) %>% 
+  count(name, phone, citystatezip, sort = TRUE)
+```
+
+## Day 3
+
+```{r}
+years_of_dog <- seq(from = 2018, by = -12, length.out = 10)
+
+aries_born_filter <- function(data, birth_years) {
+  min_date <- ymd(paste0(birth_years,"0321"))
+  max_date <- ymd(paste0(birth_years, "0419"))
+  map2_dfr(min_date, max_date, \(x, y) {filter(data, (birthdate <= y & birthdate >= x))})
+}
+
+customers %>% 
+  aries_born_filter(years_of_dog) %>% 
+  filter(citystatezip == "South Ozone Park, NY 11420")
+```
+
+## Day 4
+
+```{r}
+orders %>% 
+  filter(get_hour(shipped) == 5-1, shipped == ordered) %>% 
+  left_join(items, by = "orderid") %>% 
+  left_join(products, by = "sku") %>% 
+  left_join(customers %>% select(customerid, name, phone), by = "customerid") %>% View()
+  count(name, phone, sort = TRUE)
+
+```
+
+## Day 5
+
+```{r}
+customers %>% 
+  filter(str_detect(citystatezip, "Queens Village")) %>% 
+  inner_join(orders, by = "customerid") %>% 
+  left_join(items, by = "orderid") %>% 
+  left_join(products, by = "sku") %>% 
+  filter(str_detect(desc, "Senior Cat")) %>% 
+  count(name, phone, sort = TRUE)
+```
+
+## Day 6
+
+```{r}
+items %>% 
+  left_join(products, by = "sku") %>% 
+  group_by(orderid) %>% 
+  summarise(total_price = sum(unit_price), total_cost = sum(wholesale_cost), .groups = "drop") %>% 
+  left_join(orders, by = "orderid") %>% 
+  filter(total_cost > total) %>% 
+  left_join(customers, by = "customerid") %>% 
+  count(name, phone, sort = TRUE)
+```
+
+## Day 7
+
+```{r}
+items %>% 
+  left_join(products, by = "sku") %>% 
+  left_join(orders, by = "orderid") %>% 
+  filter(customerid %in% (customers %>% filter(name != "Emily Randolph") %>% pull(customerid) %>% unique())) %>% 
+  filter(str_detect(desc, "\\(")) %>% 
+  separate(desc, into = c("prod", "colour"), sep = " \\(") %>% 
+  mutate(date = as.Date(shipped)) %>% 
+  semi_join(items %>% 
+              left_join(products, by = "sku") %>% 
+              left_join(orders, by = "orderid") %>% 
+              filter(customerid == (customers %>% filter(name == "Emily Randolph") %>% pull(customerid) %>% unique())) %>% 
+              filter(str_detect(desc, "\\(")) %>% 
+              mutate(date = as.Date(shipped)) %>% 
+              separate(desc, into = c("prod", "colour"), sep = " \\(") %>% 
+              select(date, prod, colour), 
+            by = c("date", "prod")
+            ) %>% 
+  anti_join(items %>% 
+              left_join(products, by = "sku") %>% 
+              left_join(orders, by = "orderid") %>% 
+              filter(customerid == (customers %>% filter(name == "Emily Randolph") %>% pull(customerid) %>% unique())) %>% 
+              filter(str_detect(desc, "\\(")) %>% 
+              mutate(date = as.Date(shipped)) %>% 
+              separate(desc, into = c("prod", "colour"), sep = " \\(") %>% 
+              select(date, prod, colour), 
+            by = c("prod", "colour")) %>% 
+  select(customerid) %>% 
+  unique() %>% 
+  inner_join(customers, by = "customerid")
+#8835
+```
+
+## Day 8
+
+```{r}
+items %>% 
+  left_join(products, by = "sku") %>% 
+  left_join(orders, by = "orderid") %>% 
+  left_join(customers, by = "customerid") %>% 
+  filter(sku %in% (products %>% 
+                    filter(str_detect(desc, "Noah"), str_detect(desc, "Noah's Ark", negate = TRUE)) %>% 
+                    pull(sku) %>% 
+                    unique())
+  ) %>% 
+  count(name, phone, sort = TRUE) %>% 
+  head(1)
+```
+
